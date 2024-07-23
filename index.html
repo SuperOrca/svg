@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Interactive SVG renderer with live preview and code editing capabilities">
+    <meta name="keywords" content="SVG, renderer, code editor, preview, web tool">
+    <meta name="author" content="SuperOrca">
+    <title>Interactive SVG Renderer | Live Preview and Code Editing</title>
+    <link rel="icon" type="image/x-icon" href="/logo.svg">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/dracula.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #1e1e1e;
+            color: #f0f0f0;
+        }
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+        .editor {
+            flex: 3;
+            display: flex;
+            flex-direction: column;
+        }
+        .preview {
+            flex: 2;
+            padding: 20px;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #2a2a2a;
+            position: relative;
+        }
+        .CodeMirror {
+            flex: 1;
+            height: 100% !important;
+            font-size: 16px;
+        }
+        .CodeMirror-scrollbar-filler,
+        .CodeMirror-vscrollbar {
+            width: 10px !important;
+        }
+        .CodeMirror-scroll {
+            scrollbar-width: thin;
+        }
+        ::-webkit-scrollbar {
+            width: a0px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e1e1e;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        #svg-preview {
+            max-width: 100%;
+            max-height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #scale-factor {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            .editor,
+            .preview {
+                height: 50vh;
+                flex: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="editor">
+            <textarea id="svg-code" aria-label="SVG Code Editor"></textarea>
+        </div>
+        <div class="preview">
+            <div id="svg-preview"></div>
+            <div id="scale-factor"></div>
+        </div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/xml/xml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/edit/closetag.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/fold/xml-fold.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/edit/matchbrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/edit/matchtags.min.js"></script>
+    <script>
+        const editor = CodeMirror.fromTextArea(document.getElementById("svg-code"), {
+            mode: "xml",
+            theme: "dracula",
+            lineNumbers: true,
+            autoCloseTags: true,
+            autoCloseBrackets: true,
+            matchBrackets: true,
+            matchTags: {bothTags: true},
+            lineWrapping: true,
+            indentUnit: 2,
+            tabSize: 2,
+        });
+
+        const defaultSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 24 24">
+  <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" color="currentColor">
+    <path d="M16.5 7c2.111 1.098 3.68 2.945 4.258 5.138c.742 0 1.242 1.027 1.242 1.873c0 2.331-3.434 2.73-4 .506c-.503 1.977-3.497 1.977-4 0c-.503 1.977-3.497 1.977-4 0c-.503 1.977-3.497 1.977-4 0c-.566 2.224-4 1.825-4-.506c0-.846.5-1.873 1.242-1.873C3.82 9.945 5.39 8.098 7.5 7"/>
+    <path d="M12 4a2 2 0 1 1 0 4a2 2 0 0 1 0-4m0 0c0-.5.4-1.6 2-2m.5 8.5l.5 1m-5.5-1l-.5 1M3.5 16l.632 1.897c.66 1.98.99 2.97 1.776 3.537S7.738 22 9.825 22h4.35c2.088 0 3.131 0 3.917-.566c.786-.567 1.116-1.557 1.776-3.537L20.5 16"/>
+  </g>
+</svg>`;
+
+        editor.setValue(defaultSVG);
+        updatePreview();
+
+        editor.on("change", updatePreview);
+
+        editor.on("paste", (cm, e) => {
+            e.preventDefault();
+            const text = e.clipboardData.getData("text/plain");
+            const formatted = formatXML(text);
+            cm.replaceSelection(formatted);
+            setTimeout(updatePreview, 0);
+        });
+
+        function updatePreview() {
+            const svgCode = editor.getValue();
+            const parser = new DOMParser();
+            const svgDoc = parser.parseFromString(svgCode, "image/svg+xml");
+            const svgElement = svgDoc.documentElement;
+            
+            if (svgElement.tagName.toLowerCase() === 'svg') {
+                const previewContainer = document.getElementById("svg-preview");
+                const scaleFactorElement = document.getElementById("scale-factor");
+                
+                previewContainer.innerHTML = '';
+                previewContainer.appendChild(svgElement);
+                
+                let svgWidth = svgElement.width.baseVal.value;
+                let svgHeight = svgElement.height.baseVal.value;
+
+                if (svgWidth === 0 || svgHeight === 0) {
+                    const viewBox = svgElement.viewBox.baseVal;
+                    if (viewBox) {
+                        svgWidth = viewBox.width;
+                        svgHeight = viewBox.height;
+                    }
+                }
+
+                if (svgWidth === 0 || svgHeight === 0) {
+                    svgWidth = previewContainer.clientWidth;
+                    svgHeight = previewContainer.clientHeight;
+                }
+
+                const containerWidth = previewContainer.clientWidth;
+                const containerHeight = previewContainer.clientHeight;
+                
+                const scaleX = containerWidth / svgWidth;
+                const scaleY = containerHeight / svgHeight;
+                let scaleFactor = Math.min(scaleX, scaleY, 2);  // Cap the scale factor at 2x
+                
+                svgElement.style.width = `${svgWidth * scaleFactor}px`;
+                svgElement.style.height = `${svgHeight * scaleFactor}px`;
+                
+                scaleFactorElement.textContent = `Scale: ${scaleFactor.toFixed(2)}x`;
+            } else {
+                document.getElementById("svg-preview").innerHTML = "Invalid SVG";
+                document.getElementById("scale-factor").textContent = "";
+            }
+        }
+
+        function formatXML(xml) {
+            let formatted = '';
+            let indent = '';
+            const tab = '  ';
+            xml.split(/>\s*</).forEach(function(node) {
+                if (node.match(/^\/\w/)) indent = indent.substring(tab.length);
+                formatted += indent + '<' + node + '>\r\n';
+                if (node.match(/^<?\w[^>]*[^\/]$/)) indent += tab;
+            });
+            return formatted.substring(1, formatted.length-3);
+        }
+
+        window.addEventListener('resize', updatePreview);
+    </script>
+</body>
+</html>
